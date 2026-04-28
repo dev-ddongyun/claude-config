@@ -1,18 +1,21 @@
 # claude-config
 
-Reusable snippets and configs for Claude Code (and friends).
+Reusable skills, snippets, and configs for Claude Code (and friends).
 
 ## Layout
 
-- `claude-md/` — drop-in fragments for project `CLAUDE.md` files.
-- (more to come: `settings/`, `skills/`, `agents/`, `statusline/`)
+```
+skills/<skill-name>/SKILL.md
+```
 
-## Usage
-
-Copy the snippet you want into the target file. No installer yet — just paste.
+Each skill is a self-contained directory with a `SKILL.md` (frontmatter `name` + `description`, then body).
 
 ## Catalog
 
-| File | What |
+| Skill | What |
 |---|---|
-| [claude-md/karpathy.md](claude-md/karpathy.md) | 4-line "Working Principles" header. Covers what Claude Code's default system prompt does NOT (assumption-stating, push-back, goal-driven decomposition). |
+| [andrej-karpathy-guidelines](skills/andrej-karpathy-guidelines/SKILL.md) | 4-line "Working Principles" header for project `CLAUDE.md`. Fills the gaps Claude Code's default system prompt leaves (assumption-stating, push-back, goal-driven decomposition). |
+
+## Usage
+
+Copy the snippet section out of a `SKILL.md` into the target file. No installer yet.

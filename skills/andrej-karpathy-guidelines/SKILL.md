@@ -1,6 +1,11 @@
+---
+name: andrej-karpathy-guidelines
+description: 4-line "Working Principles" header to drop at the top of a project CLAUDE.md. Covers what Claude Code's default system prompt does NOT — assumption-stating, push-back, and goal-driven decomposition.
+---
+
 # Karpathy Working Principles
 
-Drop the block below at the top of a project `CLAUDE.md`. Compressed from Karpathy's 4-rule set; rules 2 (Simplicity) and 3 (Surgical) are omitted because Claude Code's default system prompt already enforces them. Rules 1 (Think Before Coding) and 4 (Goal-Driven Execution) are NOT in the default system prompt — those are the unique value here.
+Compressed from Karpathy's 4-rule set. Rules 2 (Simplicity) and 3 (Surgical) are omitted because Claude Code's default system prompt already enforces them. Rules 1 (Think Before Coding) and 4 (Goal-Driven Execution) are NOT in the default system prompt — those are the unique value here.
 
 ## Snippet
 
