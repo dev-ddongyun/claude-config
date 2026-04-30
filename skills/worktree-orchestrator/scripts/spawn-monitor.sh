@@ -82,13 +82,15 @@ split_surface() {
 # surface only, so the caller column shrinks while the rest of the workspace
 # stays untouched. We do NOT try to equalize across the whole workspace.
 #
-# Layout: 2 columns fixed for N >= 3; rows grow. Each new worker is added to
-# the bottom of whichever column has fewer rows (left preferred on tie).
-#   N=3: [A0, B0, A1]                     left=2, right=1
-#   N=4: [A0, B0, A1, B1]                 left=2, right=2
-#   N=5: [A0, B0, A1, B1, A2]             left=3, right=2
-#   N=6: [A0, B0, A1, B1, A2, B2]         left=3, right=3
-# N=1,2 keep a single column (no point in 2 cols for so few panes).
+# Layout: 2 columns fixed for N >= 3; rows grow. When N is odd, the last left
+# row spans full width (because no right counterpart was split off it).
+# Build order matters — we MUST build the full LEFT chain before adding any
+# RIGHT panes, so that RIGHT panes don't get squished by later down-splits.
+#   N=3: [A0|B0] / [A1 wide]
+#   N=4: [A0|B0] / [A1|B1]
+#   N=5: [A0|B0] / [A1|B1] / [A2 wide]
+#   N=6: [A0|B0] / [A1|B1] / [A2|B2]
+# N=1,2 keep a single column.
 PANES=()
 case "$N" in
   1)
@@ -105,14 +107,17 @@ case "$N" in
     RIGHT_ROWS=$(( N / 2 ))
     LEFT=()
     RIGHT=()
+    # 1) LEFT chain first: A0 → A1 → A2 → ... (top to bottom)
     LEFT[0]="$(split_surface "$CALLER_SURFACE" right)"
-    RIGHT[0]="$(split_surface "${LEFT[0]}" right)"
     for ((r = 1; r < LEFT_ROWS; r++)); do
       LEFT[r]="$(split_surface "${LEFT[r - 1]}" down)"
     done
-    for ((r = 1; r < RIGHT_ROWS; r++)); do
-      RIGHT[r]="$(split_surface "${RIGHT[r - 1]}" down)"
+    # 2) RIGHT panes split off each LEFT row that has a counterpart.
+    #    Rows beyond RIGHT_ROWS (the odd-N tail) stay full-width.
+    for ((r = 0; r < RIGHT_ROWS; r++)); do
+      RIGHT[r]="$(split_surface "${LEFT[r]}" right)"
     done
+    # 3) Row-major flatten so workers fill left→right, top→bottom.
     for ((r = 0; r < LEFT_ROWS; r++)); do
       PANES+=("${LEFT[r]}")
       (( r < RIGHT_ROWS )) && PANES+=("${RIGHT[r]}")

@@ -101,6 +101,23 @@ if git -C "$REPO_PATH" rev-parse --verify "$BRANCH" >/dev/null 2>&1; then
     echo "(branch '$BRANCH' not deleted — may be unmerged elsewhere; delete manually if intended)"
 fi
 
+# Close the worker's cmux panel (if spawn-monitor.sh registered one).
+PANEL_STATE="$HOME/.claude/worktree-orchestrator/state/cmux-worker-panels.tsv"
+if [ -s "$PANEL_STATE" ]; then
+  PANEL_REF="$(awk -F'\t' -v id="$TMUX_SESSION" '$1==id {print $2; exit}' "$PANEL_STATE")"
+  if [ -n "$PANEL_REF" ]; then
+    CMUX_BIN="$(command -v cmux 2>/dev/null || true)"
+    [ -z "$CMUX_BIN" ] && [ -x "/Applications/cmux.app/Contents/Resources/bin/cmux" ] && CMUX_BIN="/Applications/cmux.app/Contents/Resources/bin/cmux"
+    if [ -n "$CMUX_BIN" ]; then
+      "$CMUX_BIN" close-surface --surface "$PANEL_REF" >/dev/null 2>&1 || true
+      echo "closed panel: $PANEL_REF"
+    fi
+    TMP_PANEL="$(mktemp)"
+    awk -F'\t' -v id="$TMUX_SESSION" '$1!=id' "$PANEL_STATE" > "$TMP_PANEL"
+    mv "$TMP_PANEL" "$PANEL_STATE"
+  fi
+fi
+
 TMP="$(mktemp)"
 awk -F'\t' -v id="$TASK_ID" '$1!=id' "$STATE_FILE" > "$TMP"
 mv "$TMP" "$STATE_FILE"
