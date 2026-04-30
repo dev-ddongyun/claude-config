@@ -7,6 +7,19 @@ description: Explicit-only. Invoke ONLY when the user types `/worktree-orchestra
 
 You orchestrate parallel Claude Code workers across isolated git worktrees. Each worker is a real, attachable `claude` session running in its own tmux session — the user can `tmux attach -t cwo-<task-id>` at any time to observe or give direct guidance.
 
+## MANDATORY: spawn the monitor immediately after the first worker
+
+**The monitor is not optional. Do not forget it.**
+
+The instant you spawn the first worker, run `spawn-monitor.sh` in the SAME response — before sending any task, before doing anything else. Workers are headless tmux sessions; without the monitor the user is staring at a blank wall while you claim things are "running". That is unacceptable. The user must be able to see every worker's pane in real time so they can intervene.
+
+Order of operations on every orchestration:
+1. `spawn-worker.sh` for each task (batched in one response)
+2. `spawn-monitor.sh` — in that same response, never deferred
+3. Then `send-task.sh` with the initial prompts
+
+If you ever spawn workers and a turn ends without the monitor up, you've broken the contract. When in doubt, re-run `spawn-monitor.sh` — it tears down stale panels and rebuilds. Same rule applies after spawning additional workers from the rotation queue: re-spawn the monitor so the new worker gets a pane.
+
 ## When to use
 
 - User wants to parallelize multiple independent tasks across worktrees
@@ -166,22 +179,34 @@ Prefer `drain-events.sh` over `check-status.sh` for routine status sync. Use `ch
 
 ## Workflow
 
-### 1. Spawn
+### 1. Spawn (workers + monitor — same response)
 
-For each task in the approved plan:
+For each task in the approved plan, run spawn-worker. **In the same response**, also run spawn-monitor. Do not split these across turns.
 
 ```bash
 ~/.claude/skills/worktree-orchestrator/scripts/spawn-worker.sh \
   <repo-path> <task-id> <branch-name> [base-branch]
+# ...one per task, then immediately:
+~/.claude/skills/worktree-orchestrator/scripts/spawn-monitor.sh
 ```
 
-This creates `<repo-path>/../<repo-name>-worktrees/<task-id>/`, a new branch, a tmux session named `cwo-<task-id>`, and starts `claude` inside it. After ~3 seconds (claude needs to boot), send the initial prompt:
+This creates `<repo-path>/.claude/worktrees/<task-id>/`, a new branch, a tmux session named `cwo-<task-id>`, starts `claude` inside it, and (via spawn-monitor) splits the caller's surface into a 2-column grid showing every worker's pane live.
+
+After ~3 seconds (claude needs to boot), send the initial prompt:
 
 ```bash
 ~/.claude/skills/worktree-orchestrator/scripts/send-task.sh <task-id> "$(cat <<'EOF'
 You are working in an isolated git worktree on task: <task-id>.
 You may only modify files under: <allowed paths>.
 Do not touch files outside this scope.
+
+If your task has independent sub-parts that can run concurrently (e.g.
+multiple files to scaffold, independent searches, parallel edits with no
+shared state), dispatch them in parallel — invoke the
+`superpowers:dispatching-parallel-agents` skill, or send multiple tool
+calls in a single response. Sequential execution of independent work is a
+waste of wall time.
+
 When done, run: touch .worker-done
 Then summarize what you changed in the chat.
 
@@ -190,17 +215,15 @@ EOF
 )"
 ```
 
+The parallel-dispatch instruction is not boilerplate — include it whenever the task plausibly has independent sub-parts. Workers default to sequential execution unless told otherwise.
+
 The `.worker-done` sentinel file is how the main session detects completion (check via `check-status.sh` or by `ls <worktree>/.worker-done`).
 
 ### 2. Monitor
 
 **At the start of every user turn during orchestration, call `drain-events.sh`** to pick up new worker events (stop / prompt / notify) since the last drain. That is the canonical status channel — it is event-driven and far cheaper than tmux pane capture.
 
-Default visual path: a SINGLE tmux session "cwo-monitor" with N panes laid out by worker count, opened in one Terminal.app window. The user places that window on the side of their screen — minimal real estate, all workers visible.
-
-```bash
-~/.claude/skills/worktree-orchestrator/scripts/spawn-monitor.sh
-```
+The visual monitor was already spawned in step 1 (it is mandatory, not optional). If you spawned new workers since then, re-run `spawn-monitor.sh` so the new pane appears — it tears down stale panels and rebuilds.
 
 Layout templates by worker count:
 
