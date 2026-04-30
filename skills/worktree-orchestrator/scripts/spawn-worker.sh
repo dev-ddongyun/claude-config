@@ -33,16 +33,34 @@ fi
 
 # Concurrency cap: matches spawn-monitor.sh display limit. Count workers whose
 # tmux session is alive — dead rows don't count toward the cap.
+# Slot allocation: each worker gets a unique slot in [1..MAX_CONCURRENT] used
+# as a port offset (CWO_SLOT). Reuses the lowest free slot among live rows.
 MAX_CONCURRENT=4
 ALIVE=0
-while IFS=$'\t' read -r _id _repo _branch _base _worktree tmux_session _started; do
+USED_SLOTS=""
+while IFS=$'\t' read -r _id _repo _branch _base _worktree tmux_session _started slot _rest; do
   [ -z "$tmux_session" ] && continue
-  tmux has-session -t "$tmux_session" 2>/dev/null && ALIVE=$((ALIVE + 1))
+  if tmux has-session -t "$tmux_session" 2>/dev/null; then
+    ALIVE=$((ALIVE + 1))
+    [ -n "$slot" ] && USED_SLOTS="$USED_SLOTS $slot "
+  fi
 done < "$STATE_FILE"
 if [ "$ALIVE" -ge "$MAX_CONCURRENT" ]; then
   echo "ERROR: $ALIVE workers already running (cap=$MAX_CONCURRENT)." >&2
   echo "       Free a slot with merge-worker.sh or kill-worker.sh first." >&2
   exit 71
+fi
+
+SLOT=""
+for n in $(seq 1 "$MAX_CONCURRENT"); do
+  case "$USED_SLOTS" in
+    *" $n "*) ;;
+    *) SLOT="$n"; break ;;
+  esac
+done
+if [ -z "$SLOT" ]; then
+  echo "ERROR: no free slot (this should not happen — cap check above failed)" >&2
+  exit 72
 fi
 
 # Validate repo
@@ -117,13 +135,17 @@ if [ -n "$GIT_COMMON_DIR" ] && [ -d "$GIT_COMMON_DIR" ]; then
   fi
 fi
 
-# Start a detached tmux session that cd's into the worktree and runs claude
-tmux new-session -d -s "$TMUX_SESSION" -c "$WORKTREE_PATH" "$CLAUDE_BIN"
+# Start a detached tmux session that cd's into the worktree and runs claude.
+# CWO_SLOT is exported into the worker's shell so its dev servers can bind
+# to (base_port + CWO_SLOT) and avoid colliding with the main repo or with
+# other live workers.
+tmux new-session -d -s "$TMUX_SESSION" -c "$WORKTREE_PATH" \
+  -e "CWO_SLOT=$SLOT" -e "CWO_TASK_ID=$TASK_ID" "$CLAUDE_BIN"
 
-# Register
+# Register (slot appended as 8th column; older readers ignore trailing fields)
 NOW="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-  "$TASK_ID" "$REPO_PATH" "$BRANCH" "$BASE_BRANCH" "$WORKTREE_PATH" "$TMUX_SESSION" "$NOW" \
+printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+  "$TASK_ID" "$REPO_PATH" "$BRANCH" "$BASE_BRANCH" "$WORKTREE_PATH" "$TMUX_SESSION" "$NOW" "$SLOT" \
   >> "$STATE_FILE"
 
 cat <<EOF
@@ -131,6 +153,7 @@ SPAWNED: $TASK_ID
   worktree:    $WORKTREE_PATH
   branch:      $BRANCH (from $BASE_BRANCH)
   tmux:        $TMUX_SESSION
+  slot:        $SLOT  (CWO_SLOT — add this to all dev server ports)
   attach:      tmux attach -t $TMUX_SESSION
   detach:      Ctrl-B then D
 

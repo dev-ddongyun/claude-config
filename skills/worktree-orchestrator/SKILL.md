@@ -200,6 +200,13 @@ You are working in an isolated git worktree on task: <task-id>.
 You may only modify files under: <allowed paths>.
 Do not touch files outside this scope.
 
+Your slot number is $CWO_SLOT (1..4). For ANY dev server / port binding
+in this worktree (vite, next, api, storybook, etc.), bind to
+base_port + $CWO_SLOT — e.g. 5173 → 5173+$CWO_SLOT, 4484 → 4484+$CWO_SLOT.
+Update vite.config / next.config / package.json scripts / .env.local as
+needed BEFORE starting any server, so you don't collide with the main
+repo or other live workers.
+
 If your task has independent sub-parts that can run concurrently (e.g.
 multiple files to scaffold, independent searches, parallel edits with no
 shared state), dispatch them in parallel — invoke the

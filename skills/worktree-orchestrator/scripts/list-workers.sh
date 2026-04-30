@@ -11,10 +11,10 @@ if [ ! -s "$STATE_FILE" ]; then
   exit 0
 fi
 
-printf "%-20s %-30s %-12s %-10s %s\n" "TASK_ID" "BRANCH" "TMUX" "DONE" "WORKTREE"
-printf "%-20s %-30s %-12s %-10s %s\n" "-------" "------" "----" "----" "--------"
+printf "%-20s %-4s %-30s %-12s %-10s %s\n" "TASK_ID" "SLOT" "BRANCH" "TMUX" "DONE" "WORKTREE"
+printf "%-20s %-4s %-30s %-12s %-10s %s\n" "-------" "----" "------" "----" "----" "--------"
 
-while IFS=$'\t' read -r TASK_ID REPO BRANCH BASE WORKTREE TMUX_SESSION STARTED; do
+while IFS=$'\t' read -r TASK_ID REPO BRANCH BASE WORKTREE TMUX_SESSION STARTED SLOT _rest; do
   [ -z "$TASK_ID" ] && continue
   if tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
     LIVE="alive"
@@ -26,5 +26,5 @@ while IFS=$'\t' read -r TASK_ID REPO BRANCH BASE WORKTREE TMUX_SESSION STARTED; 
   else
     DONE="no"
   fi
-  printf "%-20s %-30s %-12s %-10s %s\n" "$TASK_ID" "$BRANCH" "$LIVE" "$DONE" "$WORKTREE"
+  printf "%-20s %-4s %-30s %-12s %-10s %s\n" "$TASK_ID" "${SLOT:--}" "$BRANCH" "$LIVE" "$DONE" "$WORKTREE"
 done < "$STATE_FILE"
